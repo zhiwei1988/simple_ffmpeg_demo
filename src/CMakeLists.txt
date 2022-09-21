@@ -1,4 +1,5 @@
-add_executable(av_demo ./main.cpp)
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/ SRC)
+add_executable(av_demo ${SRC})
 
 target_include_directories(av_demo PRIVATE /usr/local/ffmpeg-5.0/include)
 target_link_directories(av_demo PRIVATE /usr/local/ffmpeg-5.0/include/lib)

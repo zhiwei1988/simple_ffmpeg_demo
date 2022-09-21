@@ -25,7 +25,7 @@ static int32_t init_input_video(char* video_input_file, const char* video_format
 {
     int32_t result = 0;
     // 根据输入文件的格式名称查找 AVInputFormat 结构
-    AVInputFormat* video_input_format = av_find_input_format(video_format);
+    const AVInputFormat* video_input_format = av_find_input_format(video_format);
     if (video_input_format == nullptr) {
         printf("Fail to find proper AVInputFormat for format: %s\n", video_format);
         return -1;
@@ -50,7 +50,7 @@ static int32_t init_input_audio(char* audio_input_file, const char* audio_format
 {
     int32_t result = 0;
     // 根据输入文件的格式名称查找 AVInputFormat 结构
-    AVInputFormat* audio_input_format = av_find_input_format(audio_format);
+    const AVInputFormat* audio_input_format = av_find_input_format(audio_format);
     if (audio_input_format == nullptr) {
         printf("Fail to find proper AVInputFormat for format: %s\n", audio_format);
         return -1;
@@ -83,7 +83,7 @@ static int32_t init_output(char* output_file)
 
     // 在创建输出文件句柄后，接下来要向其中添加媒体流
     // 添加媒体流可以使用函数 avformat_new_stream 实现
-    AVOutputFormat* fmt = output_fmt_ctx->oformat;
+    const AVOutputFormat* fmt = output_fmt_ctx->oformat;
     printf("Default video codec id: %d audio codec id: %d\n", fmt->video_codec, fmt->audio_codec);
 
     AVStream* video_stream = avformat_new_stream(output_fmt_ctx, nullptr);
