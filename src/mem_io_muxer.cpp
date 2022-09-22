@@ -5,10 +5,13 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/samplefmt.h>
 #include <libavutil/timestamp.h>
+#include <libavutil/file.h>
+#include <libavutil/common.h>
 #include <libavformat/avformat.h>
 }
 
 #include <algorithm>
+#include <stdio.h>
 
 static AVFormatContext* v_ifmt_ctx = nullptr; // 用于音频输入
 static AVFormatContext* a_ifmt_ctx = nullptr; // 用于视频输入
@@ -25,8 +28,8 @@ static size_t audio_buffer_size;
 
 static AVIOContext *audio_avio_ctx = nullptr;
 static AVIOContext *video_avio_ctx = nullptr;
-static uint8_t *audio_avio_ctx_buffer = NULL;
-static uint8_t *video_avio_ctx_buffer = NULL;
+static uint8_t *audio_avio_ctx_buffer = nullptr;
+static uint8_t *video_avio_ctx_buffer = nullptr;
 
 static const size_t avio_ctx_buffer_size = 4096;
 
@@ -42,7 +45,7 @@ struct buffer_data a_bd = { 0 };
 static int read_packet(void *opaque, uint8_t *buf, int buf_size)
 {
     struct buffer_data *bd = (struct buffer_data *)opaque;
-    buf_size = std::min(buf_size, bd->size);
+    buf_size = FFMIN(buf_size, bd->size);
 
     if (buf_size <= 0) {
        return -1; 
@@ -64,7 +67,7 @@ static int32_t open_input(char* filename, struct buffer_data *bd, uint8_t **inpu
 {
 
      /* 将文件中的内容映射到内存 */
-    int ret = av_file_map(filename, input_buffer, buffer_size, 0, NULL);
+    int ret = av_file_map(filename, input_buffer, buffer_size, 0, nullptr);
     if (ret < 0) {
         return ret;
     }
@@ -73,7 +76,7 @@ static int32_t open_input(char* filename, struct buffer_data *bd, uint8_t **inpu
     bd->size = *buffer_size;
 
     // 分配 io 缓存区
-    *avio_ctx_buffer = av_malloc(avio_ctx_buffer_size);
+    *avio_ctx_buffer = (uint8_t*)av_malloc(avio_ctx_buffer_size);
     if (*avio_ctx_buffer == nullptr) {
         return -1;
     }
@@ -87,12 +90,12 @@ static int32_t open_input(char* filename, struct buffer_data *bd, uint8_t **inpu
 
     // 分配 AVFormatContext, 指定 AVFormatContext.pb 字段。必须在调用 avformat_open_input() 之前完成
     // 如果输入是文件 AVFormatContext 的分配可以交由 avformat_open_input 完成
-    *ifmt_ctx = avformat_alloc_context()
+    *ifmt_ctx = avformat_alloc_context();
     if (*ifmt_ctx == nullptr) {
         return -1;
     }
 
-    (*ifmt_ctx)->pb = aio_ctx;
+    (*ifmt_ctx)->pb = *avio_ctx;
     (*ifmt_ctx)->probesize = 1024; // 指定探测数据大小
 
     ret = avformat_open_input(ifmt_ctx, nullptr, nullptr, nullptr);
@@ -196,7 +199,7 @@ static int32_t do_muxing()
 
     int32_t video_frame_idx = 0;
     int32_t audio_frame_idx = 0;
-    result = avformat_write_header(output_fmt_ctx, nullptr);
+    result = avformat_write_header(ofmt_ctx, nullptr);
     if (result < 0) {
         printf("avformat_write_header fail\n");
         return -1;
@@ -247,7 +250,7 @@ static int32_t do_muxing()
 
             cur_video_pts = pkt->pts;
             pkt->stream_index = out_video_st_idx;
-            output_stream = output_fmt_ctx->streams[out_video_st_idx];
+            output_stream = ofmt_ctx->streams[out_video_st_idx];
         } else {
 
             // write audio
@@ -277,7 +280,7 @@ static int32_t do_muxing()
 
             cur_audio_pts = pkt->pts;
             pkt->stream_index = out_audio_st_idx;
-            output_stream = output_fmt_ctx->streams[out_audio_st_idx];
+            output_stream = ofmt_ctx->streams[out_audio_st_idx];
         }
 
         // 从输入文件读取的码流包中保存的时间戳是以输入流的time_base为基准的，在写入输出文件之前需要转换为以输出流的time_base为基准
@@ -287,7 +290,7 @@ static int32_t do_muxing()
         
         printf("Final pts: %jd duration: %jd timebase: %d / %d\n", pkt->pts, pkt->duration, output_stream->time_base.num, output_stream->time_base.den);
 
-        if (av_interleaved_write_frame(output_fmt_ctx, pkt) < 0) {
+        if (av_interleaved_write_frame(ofmt_ctx, pkt) < 0) {
             printf("av_interleaved_write_frame fail\n");
             av_packet_unref(pkt);
             break;
@@ -296,7 +299,7 @@ static int32_t do_muxing()
         av_packet_unref(pkt);
     }
 
-    result = av_write_trailer(output_fmt_ctx);
+    result = av_write_trailer(ofmt_ctx);
     
     av_packet_free(&pkt);
     return result;
@@ -306,9 +309,8 @@ int main(int argc, char *argv[])
 {
 
     int ret = 0;
-
     if (argc != 3) {
-        printf("usage: %s video_input_file audio_input_file\n" argv[0]);
+//        printf("usage: %s video_input_file audio_input_file\n" argv[0]);
         return 1;
     }
     
@@ -335,14 +337,14 @@ int main(int argc, char *argv[])
     do_muxing();
 
 end:
-    avformat_free_context(video_fmt_ctx);
-    avformat_free_context(audio_fmt_ctx);
+    avformat_free_context(v_ifmt_ctx);
+    avformat_free_context(a_ifmt_ctx);
 
-    if (!(output_fmt_ctx->oformat->flags & AVFMT_NOFILE)) {
-        avio_closep(&output_fmt_ctx->pb);
+    if (!(ofmt_ctx->oformat->flags & AVFMT_NOFILE)) {
+        avio_closep(&ofmt_ctx->pb);
     }
 
-    avformat_free_context(output_fmt_ctx);
+    avformat_free_context(ofmt_ctx);
 
 
     /* note: the internal buffer could have changed, and be != avio_ctx_buffer */
