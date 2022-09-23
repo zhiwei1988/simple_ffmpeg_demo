@@ -37,3 +37,4 @@ build/
 cmake-build-debug/
 .clion.source.upload.marker
 .idea
+.cache
