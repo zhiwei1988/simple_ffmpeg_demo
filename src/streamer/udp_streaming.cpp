@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
     AVFormatContext *ifmt_ctx = nullptr;
     int32_t video_index = -1;
     AVFormatContext *ofmt_ctx = nullptr;
-    AVOutputFormat *ofmt = nullptr;
+    const AVOutputFormat *ofmt = nullptr;
     int64_t start_time = av_gettime();
     int32_t frame_index = 0;
 
