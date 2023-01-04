@@ -271,7 +271,10 @@ int32_t muxing()
         pkt->duration = av_rescale_q(pkt->duration, input_stream->time_base, output_stream->time_base);
         
         printf("Final pts: %jd duration: %jd timebase: %d / %d\n", pkt->pts, pkt->duration, output_stream->time_base.num, output_stream->time_base.den);
+        
+        // 如果输入是文件（非实时流），而输出是实时流，此处还应该增加帧间隔控制的逻辑
 
+        // 上面的代码已经对数据通过 pts 排序，这里可以直接使用 av_write_frame
         if (av_interleaved_write_frame(output_fmt_ctx, pkt) < 0) {
             printf("av_interleaved_write_frame fail\n");
             av_packet_unref(pkt);
